@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>OCR en PDF Escaneado</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; }
+    #output { margin-top: 20px; white-space: pre-wrap; background-color: #f9f9f9; padding: 10px; border: 1px solid #ddd; max-height: 400px; overflow-y: scroll; }
+    canvas { display: none; } /* Oculta los canvas si no los quieres ver */
+  </style>
+</head>
+<body>
+
+  <h1>Extraer Texto de PDF Escaneado (OCR)</h1>
+
+  <input type="file" id="fileInput" accept=".pdf" />
+  <button onclick="procesarPDF()">Extraer Texto</button>
+
+  <h2>Texto Extraído:</h2>
+  <div id="output">Aquí se mostrará el texto...</div>
+
+  <!-- PDF.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <!-- Tesseract.js -->
+  <script src="https://unpkg.com/tesseract.js@v2.1.4/dist/tesseract.min.js"></script>
+
+  <script>
+    async function procesarPDF() {
+      const input = document.getElementById('fileInput');
+      const output = document.getElementById('output');
+      output.innerHTML = '';
+
+      if (!input.files.length) {
+        alert('Por favor selecciona un archivo PDF.');
+        return;
+      }
+
+      const file = input.files[0];
+      const reader = new FileReader();
+
+      reader.onload = async function() {
+        const typedarray = new Uint8Array(reader.result);
+
+        try {
+          const pdf = await pdfjsLib.getDocument(typedarray).promise;
+          output.innerHTML = `PDF cargado. Tiene ${pdf.numPages} páginas.<br>Procesando OCR...<br><br>`;
+
+          let textoCompleto = '';
+
+          // Recorremos cada página del PDF
+          for (let paginaNum = 1; paginaNum <= pdf.numPages; paginaNum++) {
+            output.innerHTML += `Procesando página ${paginaNum}...<br>`;
+
+            const pagina = await pdf.getPage(paginaNum);
+
+            // Crear un canvas para renderizar la página
+            const viewport = pagina.getViewport({ scale: 2.0 });
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            await pagina.render({ canvasContext: context, viewport: viewport }).promise;
+
+            // Obtener imagen del canvas como data URL
+            const imageDataUrl = canvas.toDataURL('image/png');
+
+            // Aplicar OCR usando Tesseract.js
+            const result = await Tesseract.recognize(
+              imageDataUrl,
+              'spa', // idioma español
+              {
+                logger: m => console.log(`[Pág. ${paginaNum}]`, m)
+              }
+            );
+
+            // Añadir el texto extraído
+            textoCompleto += `\n\n--- Página ${paginaNum} ---\n\n` + result.data.text;
+          }
+
+          // Mostrar todo el texto extraído
+          output.innerHTML += `<br><strong>Texto Completo Extraído:</strong><br>${textoCompleto}`;
+
+        } catch (error) {
+          console.error("Error al procesar el PDF:", error);
+          output.textContent = "Ocurrió un error al procesar el PDF.";
+        }
+      };
+
+      reader.readAsArrayBuffer(file);
+    }
+  </script>
+
+</body>
+</html>
